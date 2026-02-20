@@ -36,7 +36,39 @@ Analyze \*\*Velocity Made Good (VMG)\*\* from Vakaros Atlas 2 GPS sailing data. 
 
 \- ✅ Export analysis results to CSV
 
+## 🌐 Web App
 
+**[🚀 Launch Web App](https://YOUR-USERNAME-vakaros-vmg-analyzer.streamlit.app)** - No installation required!
+
+Use the interactive web interface to analyze your Atlas 2 data directly in your browser:
+- 📁 Upload your CSV file
+- 📍 Enter waypoint coordinates
+- 📊 View instant analysis with interactive charts
+- 📥 Download results
+
+Perfect for sailors who want quick analysis without installing Python!
+
+---
+
+## 🖥️ Command Line Version
+
+For advanced users who prefer Python:
+
+### Installation
+
+\`\`\`bash
+git clone https://github.com/YOUR-USERNAME/vakaros-vmg-analyzer.git
+cd vakaros-vmg-analyzer
+pip install -r requirements.txt
+\`\`\`
+
+### Usage
+
+\`\`\`bash
+python vmg_analyzer.py
+\`\`\`
+
+See [detailed instructions](#quick-start) below.
 
 \## 📦 Installation
 
