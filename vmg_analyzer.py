@@ -2,9 +2,6 @@
 Vakaros Atlas 2 VMG Analyzer
 Calculates and visualizes Velocity Made Good (VMG) to a waypoint
 """
-CSV_FILE = 'tim_1st_leg.csv'  # Path to your CSV file
-WAYPOINT_LAT = 28.384775200000000          # Your waypoint latitude
-WAYPOINT_LON = -80.6494951999999         # Your waypoint longitude
 
 
 import pandas as pd
@@ -301,9 +298,9 @@ def main():
     # ========== CONFIGURATION ==========
     # UPDATE THESE VALUES:
     
-    CSV_FILE = 'atlas2_export.csv'  # Path to your Atlas 2 CSV export
-    WAYPOINT_LAT = 42.3601  # Waypoint latitude (decimal degrees)
-    WAYPOINT_LON = -71.0589  # Waypoint longitude (decimal degrees)
+    CSV_FILE = 'tim_1st_leg.csv'  # Path to your Atlas 2 CSV export
+    WAYPOINT_LAT = 28.384775200000000    # Waypoint latitude (decimal degrees)
+    WAYPOINT_LON = -80.6494951999999   # Waypoint longitude (decimal degrees)
     
     # ===================================
     
