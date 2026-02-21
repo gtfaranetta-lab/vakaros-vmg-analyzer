@@ -337,8 +337,13 @@ else:
         st.markdown("---")
         
         # Download results
-        st.markdown("## 📥 Download Results")
+        st.markdown("## Download Results")
         
         csv = df.to_csv(index=False)
         st.download_button(
-            label="⬇️
+            label="Download Analysis as CSV",
+            data=csv,
+            file_name="vmg_analysis_results.csv",
+            mime="text/csv",
+            help="Download the complete dataset with VMG calculations"
+        )
