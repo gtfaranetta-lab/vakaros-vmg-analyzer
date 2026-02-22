@@ -92,13 +92,41 @@ def load_and_clean_data(uploaded_file):
     """Load CSV and standardize column names"""
     df = pd.read_csv(uploaded_file)
     
-    # Column name mappings
+   # Column name mappings
     column_mappings = {
-        'lat': 'latitude', 'Lat': 'latitude', 'Latitude': 'latitude', 'LAT': 'latitude',
-        'lon': 'longitude', 'Lon': 'longitude', 'Longitude': 'longitude', 'LON': 'longitude', 'lng': 'longitude',
-        'sog': 'SOG', 'speed': 'SOG', 'Speed': 'SOG', 'SOG': 'SOG', 'speed_knots': 'SOG',
-        'cog': 'COG', 'course': 'COG', 'Course': 'COG', 'COG': 'COG', 'heading': 'COG',
-        'time': 'timestamp', 'Time': 'timestamp', 'timestamp': 'timestamp', 'Timestamp': 'timestamp',
+        # Latitude
+        'lat': 'latitude', 
+        'Lat': 'latitude', 
+        'Latitude': 'latitude', 
+        'LAT': 'latitude',
+        
+        # Longitude
+        'lon': 'longitude', 
+        'Lon': 'longitude', 
+        'Longitude': 'longitude', 
+        'LON': 'longitude', 
+        'lng': 'longitude',
+        
+        # Speed Over Ground (SOG)
+        'sog': 'SOG', 
+        'SOG': 'SOG',
+        'sog_kts': 'SOG',       # <-- ADDED THIS
+        'speed': 'SOG', 
+        'Speed': 'SOG', 
+        'speed_knots': 'SOG',
+        
+        # Course Over Ground (COG)
+        'cog': 'COG', 
+        'COG': 'COG',
+        'course': 'COG', 
+        'Course': 'COG', 
+        'heading': 'COG',
+        
+        # Timestamp
+        'time': 'timestamp', 
+        'Time': 'timestamp', 
+        'timestamp': 'timestamp', 
+        'Timestamp': 'timestamp',
     }
     
     df.rename(columns=column_mappings, inplace=True)
