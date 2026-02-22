@@ -369,7 +369,7 @@ else:
             ax4.fill_between(df.index, df['distance_to_waypoint'], alpha=0.3, color='purple')
             st.pyplot(fig4)
 
-	with tab5:
+with tab5:
             # Check if heel data exists
             if 'heel' in df.columns:
                 fig5, (ax5a, ax5b) = plt.subplots(2, 1, figsize=(10, 10))
