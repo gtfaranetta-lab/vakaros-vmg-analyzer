@@ -287,7 +287,7 @@ else:
         tab1, tab2, tab3, tab4 = st.tabs(["VMG Over Time", "SOG vs VMG", "Track Map", "Distance to Waypoint"])
         
         with tab1:
-            fig11, ax1 = plt.subplots(figsize=(10, 5))
+            fig1, ax1 = plt.subplots(figsize=(10, 5))
             colors = ['green' if v > 0 else 'red' for v in df['VMG']]
             ax1.scatter(df.index, df['VMG'], c=colors, alpha=0.6, s=20)
             ax1.axhline(y=0, color='black', linestyle='--', linewidth=1)
