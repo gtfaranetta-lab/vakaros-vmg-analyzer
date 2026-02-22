@@ -350,7 +350,7 @@ else:
                                 s=30, alpha=0.8)
             ax3.plot(waypoint_lat, waypoint_lon, 'r*', markersize=20, 
                     label='Waypoint', markeredgecolor='black', markeredgewidth=1)
-            ax3.set_ylim(df['longitude'].min(), df['longitude'].max())
+            ax3.set_ylim(df['longitude'].max(), df['longitude'].min())
             ax3.set_xlabel('Latitude')
             ax3.set_ylabel('Longitude')
             ax3.set_title('Track (colored by VMG)')
