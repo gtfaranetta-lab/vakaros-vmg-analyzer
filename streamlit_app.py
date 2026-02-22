@@ -368,6 +368,92 @@ else:
             ax4.grid(True, alpha=0.3)
             ax4.fill_between(df.index, df['distance_to_waypoint'], alpha=0.3, color='purple')
             st.pyplot(fig4)
+with tab5:
+            # Check if heel data exists
+            if 'heel' in df.columns:
+                fig5, (ax5a, ax5b) = plt.subplots(2, 1, figsize=(10, 10))
+                
+                # Scatter plot: VMG vs Heel
+                scatter = ax5a.scatter(df['heel'], df['VMG'], 
+                                      c=df['SOG'], cmap='viridis', 
+                                      s=30, alpha=0.6)
+                ax5a.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.5)
+                ax5a.axvline(x=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
+                ax5a.set_xlabel('Heel Angle (degrees)')
+                ax5a.set_ylabel('VMG (knots)')
+                ax5a.set_title('VMG vs Heel Angle (colored by SOG)')
+                ax5a.grid(True, alpha=0.3)
+                plt.colorbar(scatter, ax=ax5a, label='SOG (knots)')
+                
+                # Calculate average VMG per heel bucket
+                df['heel_bucket'] = pd.cut(df['heel'], bins=20)
+                heel_analysis = df.groupby('heel_bucket', observed=True).agg({
+                    'VMG': 'mean',
+                    'SOG': 'mean',
+                    'heel': 'mean'
+                }).dropna()
+                
+                # Line plot: Average VMG by heel angle
+                ax5b.plot(heel_analysis['heel'], heel_analysis['VMG'], 
+                         marker='o', linewidth=2, markersize=6, color='green', label='Avg VMG')
+                ax5b.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.5)
+                ax5b.axvline(x=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
+                ax5b.set_xlabel('Heel Angle (degrees)')
+                ax5b.set_ylabel('Average VMG (knots)')
+                ax5b.set_title('Average VMG by Heel Angle')
+                ax5b.grid(True, alpha=0.3)
+                ax5b.legend()
+                
+                st.pyplot(fig5)
+                plt.close(fig5)
+                
+                # Statistics
+                st.markdown("### 📐 Heel Analysis")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Average Heel", f"{df['heel'].mean():.1f}°")
+                
+                with col2:
+                    st.metric("Max Heel", f"{df['heel'].abs().max():.1f}°")
+                
+                with col3:
+                    # Find optimal heel (heel angle with best average VMG)
+                    if len(heel_analysis) > 0:
+                        optimal_heel = heel_analysis.loc[heel_analysis['VMG'].idxmax(), 'heel']
+                        st.metric("Optimal Heel for VMG", f"{optimal_heel:.1f}°")
+                
+                # Performance by heel side
+                port_heel = df[df['heel'] < -2]  # Port (negative heel)
+                stbd_heel = df[df['heel'] > 2]   # Starboard (positive heel)
+                
+                if len(port_heel) > 0 and len(stbd_heel) > 0:
+                    st.markdown("### ⚖️ Port vs Starboard")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Port Tack** (heel < -2°)")
+                        st.write(f"Average VMG: {port_heel['VMG'].mean():.2f} kts")
+                        st.write(f"Average Heel: {port_heel['heel'].mean():.1f}°")
+                        st.write(f"Data points: {len(port_heel)}")
+                    
+                    with col2:
+                        st.write("**Starboard Tack** (heel > 2°)")
+                        st.write(f"Average VMG: {stbd_heel['VMG'].mean():.2f} kts")
+                        st.write(f"Average Heel: {stbd_heel['heel'].mean():.1f}°")
+                        st.write(f"Data points: {len(stbd_heel)}")
+                
+            else:
+                st.info("⚠️ Heel data not found in CSV. Make sure your export includes heel angle data.")
+                st.markdown("""
+                **Expected column names:**
+                - `heel`
+                - `Heel`
+                - `heel_angle`
+                - `heel_deg`
+                
+                Check your Vakaros Connect export settings to include attitude data.
+                """)
         
         st.markdown("---")
         
