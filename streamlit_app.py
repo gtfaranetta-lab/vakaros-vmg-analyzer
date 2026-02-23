@@ -135,7 +135,33 @@ def load_and_clean_data(uploaded_file):
         'timestamp': 'timestamp', 
         'Timestamp': 'timestamp',
     }
+
+def filter_by_time(df, start_time_str, end_time_str):
+    """Filter dataframe by time range"""
+    if 'timestamp' not in df.columns:
+        return df, "No timestamp column found in CSV"
     
+    try:
+        # Parse timestamps
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        
+        if start_time_str:
+            start_time = pd.to_datetime(start_time_str)
+            df = df[df['timestamp'] >= start_time]
+        
+        if end_time_str:
+            end_time = pd.to_datetime(end_time_str)
+            df = df[df['timestamp'] <= end_time]
+        
+        if len(df) == 0:
+            return None, "No data points in selected time range"
+        
+        return df, None
+    
+    except Exception as e:
+        return None, f"Error parsing time: {str(e)}"
+
+
     df.rename(columns=column_mappings, inplace=True)
     
     # Check for required columns
@@ -192,7 +218,31 @@ with st.sidebar:
         format="%.6f",
         help="Decimal degrees (West is negative)"
     )
+
+    st.markdown("---")
+    st.header("⏱️ Race Time Filter (Optional)")
+    st.markdown("Filter data to analyze a specific race or leg")
     
+    use_time_filter = st.checkbox("Enable time filtering", value=False)
+    
+    start_time = None
+    end_time = None
+    
+    if use_time_filter:
+        col1, col2 = st.columns(2)
+        with col1:
+            start_time = st.text_input(
+                "Start Time",
+                placeholder="YYYY-MM-DD HH:MM:SS",
+                help="Format: 2024-01-15 14:30:00"
+            )
+        with col2:
+            end_time = st.text_input(
+                "End Time", 
+                placeholder="YYYY-MM-DD HH:MM:SS",
+                help="Format: 2024-01-15 16:45:00"
+            )
+
     st.markdown("---")
     st.markdown("**💡 Tip:** Get coordinates from Google Maps by right-clicking a location")
 
@@ -241,6 +291,27 @@ else:
         st.info("Please ensure your CSV has columns for latitude, longitude, SOG, and COG")
     else:
         st.success(f"✅ Loaded {len(df)} data points")
+        
+        # Apply time filtering if enabled
+        if use_time_filter and (start_time or end_time):
+            with st.spinner("Filtering by time..."):
+                df, time_error = filter_by_time(df, start_time, end_time)
+                
+                if df is None:
+                    st.error(f"❌ {time_error}")
+                    st.stop()
+                else:
+                    st.success(f"✅ Filtered to {len(df)} data points in selected time range")
+
+        st.success(f"✅ Loaded {len(df)} data points")
+        
+        # Show time range if available
+        if 'timestamp' in df.columns:
+            time_range_col1, time_range_col2 = st.columns(2)
+            with time_range_col1:
+                st.info(f"📅 Start: {df['timestamp'].min()}")
+            with time_range_col2:
+                st.info(f"📅 End: {df['timestamp'].max()}")
         
         # Calculate VMG
         with st.spinner("Calculating VMG..."):
