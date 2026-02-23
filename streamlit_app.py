@@ -282,7 +282,7 @@ if uploaded_file is None:
 else:
     # Process the uploaded file
     with st.spinner("Loading data..."):
-        df, missing_cols_cols, available_cols = load_and_clean_data(uploaded_file)
+        df, missing_cols, available_cols = load_and_clean_data(uploaded_file)
     
     if df is None:
         st.error(f"❌ Missing required columns: {missing_cols}")
