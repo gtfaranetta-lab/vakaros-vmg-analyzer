@@ -345,7 +345,7 @@ else:
             scatter = ax3.scatter(df['latitude'], df['longitude'], 
                                 c=df['VMG'], cmap='RdYlGn', 
                                 s=30, alpha=0.8)
-            ax3.plot(waypoint_lon, waypoint_lat, 'r*', markersize=20, 
+            ax3.plot(waypoint_lat, waypoint_lon, 'r*', markersize=20, 
                     label='Waypoint', markeredgecolor='black', markeredgewidth=1)
             ax3.set_xlabel('Latitude')
             ax3.set_ylabel('Longitude')
