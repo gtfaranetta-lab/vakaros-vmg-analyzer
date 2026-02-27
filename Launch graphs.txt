@@ -1,15 +1,24 @@
 Launch graphs via terminal: 
-	
 	cd documents\github\vakaros-vmg-analyzer
 	pip install -r requirements.txt
 	python -m streamlit run streamlit_app.py
 
 Launch from Streamlit website: 
+	https://vakaros-vmg-analyzer-bbgxvcukzdymtuq2hppfz4.streamlit.app/
 
-https://vakaros-vmg-analyzer-bbgxvcukzdymtuq2hppfz4.streamlit.app/
+Access project: 
+        https://share.streamlit.io/
+	https://github.com/gtfaranetta-lab/vakaros-vmg-analyzer
+	Documents\GitHub\vakaros-vmg-analyzer
 
 Data points:
 	CSV_FILE = 'tim_1st_leg.csv'  # Path to your Atlas 2 CSV export
-   	WAYPOINT_LAT = 28.384775200000000    # Waypoint latitude (decimal degrees)
-   	WAYPOINT_LON = -80.6494951999999   # Waypoint longitude (decimal degrees)
+   	Windward Mark
+		WAYPOINT_LAT = 28.384775200000000    # Waypoint latitude (decimal degrees)
+   		WAYPOINT_LON = -80.6494951999999   # Waypoint longitude (decimal degrees)
+	Leeward
+		WAYPOINT_LAT = 28.384805900000000  # Waypoint latitude (decimal degrees)
+   		WAYPOINT_LON = -80.6391035999999   # Waypoint longitude (decimal degrees)
+
     
+i want to analyze each race separately by inputting a start time and end time.

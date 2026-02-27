@@ -135,7 +135,29 @@ def load_and_clean_data(uploaded_file):
         'timestamp': 'timestamp', 
         'Timestamp': 'timestamp',
     }
+
+    def filter_from_start(df, start_time_str):
+    """Filter dataframe from race start time onwards"""
+    if not start_time_str:
+        return df, None
     
+    if 'timestamp' not in df.columns:
+        return df, "No timestamp column found - cannot filter by time"
+    
+    try:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        start_time = pd.to_datetime(start_time_str)
+        df = df[df['timestamp'] >= start_time]
+        
+        if len(df) == 0:
+            return None, "No data points after the start time"
+        
+        return df, None
+    
+    except Exception as e:
+        return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
+
+
     df.rename(columns=column_mappings, inplace=True)
     
     # Check for required columns
@@ -193,6 +215,15 @@ with st.sidebar:
         help="Decimal degrees (West is negative)"
     )
     
+    st.markdown("---")
+    st.header("🏁 Race Start Time")
+    
+    race1_start = st.text_input(
+        "Race 1 Start Time",
+        placeholder="YYYY-MM-DD HH:MM:SS",
+        help="Enter the start time of Race 1. Data before this time will be filtered out."
+    )
+
     st.markdown("---")
     st.markdown("**💡 Tip:** Get coordinates from Google Maps by right-clicking a location")
 
@@ -315,6 +346,38 @@ else:
         
         st.markdown("---")
         
+    if df is None:
+        st.error(f"❌ Missing required columns: {missing_cols}")
+        st.write("**Available columns in your CSV:**")
+        st.write(available_cols)
+        st.info("Please ensure your CSV has columns for latitude, longitude, SOG, and COG")
+    else:
+        st.success(f"✅ Loaded {len(df)} data points")
+        
+        # Apply race start time filter
+        if race1_start:
+            df, filter_error = filter_from_start(df, race1_start)
+            
+            if df is None:
+                st.error(f"❌ {filter_error}")
+                st.stop()
+            else:
+                st.success(f"🏁 Filtered to {len(df)} data points from race start")
+        
+        # Show time range
+        if 'timestamp' in df.columns:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info(f"📅 Start: {df['timestamp'].min()}")
+            with col2:
+                st.info(f"📅 End: {df['timestamp'].max()}")
+        
+        # Calculate VMG
+        with st.spinner("Calculating VMG..."):
+            df = calculate_vmg(df, waypoint_lat, waypoint_lon)
+
+
+
         # Charts
         st.markdown("## 📈 Analysis Charts")
         
