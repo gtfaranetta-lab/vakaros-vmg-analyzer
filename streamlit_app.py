@@ -136,7 +136,7 @@ def load_and_clean_data(uploaded_file):
         'Timestamp': 'timestamp',
     }
 
-    def filter_from_start(df, start_time_str):
+def filter_from_start(df, start_time_str):
     """Filter dataframe from race start time onwards"""
     if not start_time_str:
         return df, None
