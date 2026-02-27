@@ -340,7 +340,7 @@ else:
             st.pyplot(fig2)
             plt.close(fig2)
         
-         with tab3:
+        with tab3:
             fig3, ax3 = plt.subplots(figsize=(10, 8))
             scatter = ax3.scatter(df['latitude'], df['longitude'], 
                                 c=df['VMG'], cmap='RdYlGn', 
