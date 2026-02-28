@@ -137,37 +137,24 @@ def load_and_clean_data(uploaded_file):
 
 def filter_from_start(df, start_time_str):
     """Filter dataframe from race start time onwards"""
-    if not start_time_str or start_time_str == "No filter - use all data":
+    if not start_time_str:
         return df, None
     
     if 'timestamp' not in df.columns:
         return df, "No timestamp column found - cannot filter by time"
     
     try:
-        # Parse timestamps and remove timezone info for simplicity
-        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
-        
-        # Parse selected time
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
         start_time = pd.to_datetime(start_time_str)
-        
-        # Filter the data
-        original_count = len(df)
         df = df[df['timestamp'] >= start_time]
         
         if len(df) == 0:
-            return None, "No data points after the selected start time"
+            return None, "No data points after the start time"
         
-        filtered_count = original_count - len(df)
-        return df, f"Filtered out {filtered_count} pre-race data points"
+        return df, None
     
     except Exception as e:
-        return None, f"Error filtering by time: {str(e)}"
-     
-   # Debug: Show timestamp format
-        if 'timestamp' in df.columns:
-            st.info(f"📅 First timestamp in data: {df['timestamp'].iloc[0]}")
-            st.info(f"📅 Timestamp format example: {str(df['timestamp'].iloc[0])}")
-
+        return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
 
 # ============================================================================
 # STREAMLIT APP
@@ -213,44 +200,11 @@ with st.sidebar:
     st.markdown("---")
     st.header("Race Start Time")
     
-    # Initialize race1_start variable
-    race1_start = None
-    
-    # If file is uploaded, create dropdown with available times
-    if uploaded_file is not None:
-        # Quick load to get timestamps
-        temp_df = pd.read_csv(uploaded_file)
-        
-        # Check for timestamp column
-        timestamp_cols = [col for col in temp_df.columns if 'time' in col.lower()]
-        
-        if timestamp_cols:
-            # Use first timestamp column found
-            time_col = timestamp_cols[0]
-            temp_df[time_col] = pd.to_datetime(temp_df[time_col])
-            
-            # Get unique timestamps (sample every 10th to reduce list size)
-            available_times = temp_df[time_col].iloc[::10].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
-            
-            # Add option for no filtering
-            time_options = ["No filter - use all data"] + available_times
-            
-            # Create dropdown
-            selected_time = st.selectbox(
-                "Select Race 1 Start Time",
-                options=time_options,
-                help="Choose the approximate start time of Race 1"
-            )
-            
-            # Set race1_start based on selection
-            if selected_time != "No filter - use all data":
-                race1_start = selected_time
-        else:
-            st.warning("No timestamp column found in CSV")
-            race1_start = None
-    else:
-        st.info("Upload CSV to select race start time")
-        race1_start = None
+    race1_start = st.text_input(
+        "Race 1 Start Time",
+        placeholder="YYYY-MM-DD HH:MM:SS",
+        help="Enter the start time of Race 1. Data before this time will be filtered out."
+    )
     
     st.markdown("---")
     st.markdown("**Tip:** Get coordinates from Google Maps by right-clicking a location")
@@ -388,20 +342,20 @@ else:
         
         with tab3:
             fig3, ax3 = plt.subplots(figsize=(10, 8))
-            scatter = ax3.scatter(df['latitude'], df['longitude'], 
+            scatter = ax3.scatter(df['longitude'], df['latitude'], 
                                 c=df['VMG'], cmap='RdYlGn', 
                                 s=30, alpha=0.8)
-            ax3.plot(waypoint_lat, waypoint_lon, 'r*', markersize=20, 
+            ax3.plot(waypoint_lon, waypoint_lat, 'r*', markersize=20, 
                     label='Waypoint', markeredgecolor='black', markeredgewidth=1)
-            ax3.set_ylim(df['longitude'].max(), df['longitude'].min())
-            ax3.set_xlabel('Latitude')
-            ax3.set_ylabel('Longitude')
+            ax3.set_xlabel('Longitude')
+            ax3.set_ylabel('Latitude')
             ax3.set_title('Track (colored by VMG)')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             ax3.axis('equal')
             plt.colorbar(scatter, ax=ax3, label='VMG (knots)')
             st.pyplot(fig3)
+            plt.close(fig3)
         
         with tab4:
             fig4, ax4 = plt.subplots(figsize=(10, 5))
