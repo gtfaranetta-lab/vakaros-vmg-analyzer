@@ -85,7 +85,7 @@ def calculate_vmg(df, waypoint_lat, waypoint_lon):
     return df
 
 # ============================================================================
-# DATA LOADING AND PROCESSING
+# DATA LOADING
 # ============================================================================
 
 def load_and_clean_data(uploaded_file):
@@ -137,31 +137,24 @@ def load_and_clean_data(uploaded_file):
 
 def filter_from_start(df, start_time_str):
     """Filter dataframe from race start time onwards"""
-    if not start_time_str or start_time_str == "No filter - use all data":
+    if not start_time_str:
         return df, None
     
     if 'timestamp' not in df.columns:
         return df, "No timestamp column found - cannot filter by time"
     
     try:
-        # Parse timestamps and remove timezone info for simplicity
-        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
-        
-        # Parse selected time
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
         start_time = pd.to_datetime(start_time_str)
-        
-        # Filter the data
-        original_count = len(df)
         df = df[df['timestamp'] >= start_time]
         
         if len(df) == 0:
-            return None, "No data points after the selected start time"
+            return None, "No data points after the start time"
         
-        filtered_count = original_count - len(df)
-        return df, f"Filtered out {filtered_count} pre-race data points"
+        return df, None
     
     except Exception as e:
-        return None, f"Error filtering by time: {str(e)}"
+        return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
 
 # ============================================================================
 # STREAMLIT APP
@@ -173,13 +166,13 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⛵ Vakaros Atlas 2 VMG Analyzer")
+st.title("Vakaros Atlas 2 VMG Analyzer")
 st.markdown("**Analyze Velocity Made Good (VMG) from your Atlas 2 GPS sailing data**")
 st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-    st.header("📁 Upload Data")
+    st.header("Upload Data")
     uploaded_file = st.file_uploader(
         "Upload your Atlas 2 CSV export",
         type=['csv'],
@@ -187,7 +180,7 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.header("📍 Waypoint")
+    st.header("Waypoint")
     st.markdown("Enter the coordinates of your target waypoint:")
     
     waypoint_lat = st.number_input(
@@ -205,105 +198,38 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.header("🏁 Race Start Time")
+    st.header("Race Start Time")
     
-    # Initialize race1_start variable
-    race1_start = None
-    
-    # If file is uploaded, create dropdown with available times
-    if uploaded_file is not None:
-        # Quick load to get timestamps
-        temp_df = pd.read_csv(uploaded_file)
-        
-        # Check for timestamp column
-        timestamp_cols = [col for col in temp_df.columns if 'time' in col.lower()]
-        
-        if timestamp_cols:
-            # Use first timestamp column found
-            time_col = timestamp_cols[0]
-            temp_df[time_col] = pd.to_datetime(temp_df[time_col])
-            
-            # Get min and max times
-            min_time = temp_df[time_col].min()
-            max_time = temp_df[time_col].max()
-            
-            # Create time options every 30 seconds
-            time_range = pd.date_range(
-                start=min_time.floor('1min'),  # Round down to nearest minute
-                end=max_time,
-                freq='30S'  # Every 30 seconds
-            )
-            
-            # Format for display
-            time_options = ["No filter - use all data"] + [t.strftime('%Y-%m-%d %H:%M:%S') for t in time_range]
-            
-            # Create dropdown
-            selected_time = st.selectbox(
-                "Select Race 1 Start Time",
-                options=time_options,
-                index=0,  # Default to "No filter"
-                help="Choose the approximate start time of Race 1 (times shown every 30 seconds)"
-            )
-            
-            # Add manual input option
-            use_manual = st.checkbox("Enter custom time instead", value=False)
-            
-            if use_manual:
-                race1_start = st.text_input(
-                    "Custom Start Time",
-                    placeholder="YYYY-MM-DD HH:MM:SS",
-                    help=f"Data ranges from {min_time.strftime('%Y-%m-%d %H:%M:%S')} to {max_time.strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-            else:
-                # Set race1_start based on selection
-                if selected_time != "No filter - use all data":
-                    race1_start = selected_time
-            
-            # Show data time range for reference
-            st.info(f"📅 Data ranges from {min_time.strftime('%H:%M:%S')} to {max_time.strftime('%H:%M:%S')}")
-            
-        else:
-            st.warning("No timestamp column found in CSV")
-            race1_start = None
-    else:
-        st.info("Upload CSV to select race start time")
-        race1_start = None
+    race1_start = st.text_input(
+        "Race 1 Start Time",
+        placeholder="YYYY-MM-DD HH:MM:SS",
+        help="Enter the start time of Race 1. Data before this time will be filtered out."
+    )
     
     st.markdown("---")
-    st.markdown("**💡 Tip:** Get coordinates from Google Maps by right-clicking a location")
+    st.markdown("**Tip:** Get coordinates from Google Maps by right-clicking a location")
 
 # Main content
 if uploaded_file is None:
-    st.info("👈 Upload your Atlas 2 CSV file to get started")
+    st.info("Upload your Atlas 2 CSV file to get started")
     
-    st.markdown("### 📋 How to Use")
+    st.markdown("### How to Use")
     st.markdown("""
-    1. **Export data** from Vakaros Connect app (Sessions → Export → CSV)
+    1. **Export data** from Vakaros Connect app (Sessions - Export - CSV)
     2. **Upload the CSV** using the sidebar
     3. **Enter waypoint coordinates** (your destination or mark)
-    4. **Select Race 1 start time** from dropdown to filter pre-race data
+    4. **Enter Race 1 start time** (optional) to filter pre-race data
     5. **View instant analysis** with charts and statistics
     6. **Download results** as a new CSV file
     """)
     
-    st.markdown("### 📊 What is VMG?")
+    st.markdown("### What is VMG?")
     st.markdown("""
     **Velocity Made Good (VMG)** measures how fast you're moving toward a waypoint.
     
-    - **Positive VMG** = Moving toward the waypoint ✅
-    - **Negative VMG** = Moving away from the waypoint ❌
-    - **VMG = SOG × cos(θ)** where θ = angle between your course and bearing to waypoint
-    """)
-    
-    st.markdown("### 📄 CSV Format")
-    st.markdown("""
-    Your CSV should include these columns (case-insensitive):
-    - `latitude` or `lat`
-    - `longitude` or `lon`
-    - `SOG` or `sog_kts` (Speed Over Ground in knots)
-    - `COG` or `course` (Course Over Ground in degrees)
-    - `timestamp` (for time filtering)
-    - `heel` (optional, for heel analysis)
+    - **Positive VMG** = Moving toward the waypoint
+    - **Negative VMG** = Moving away from the waypoint
+    - **VMG = SOG x cos(angle)** where angle = difference between your course and bearing to waypoint
     """)
 
 else:
@@ -311,37 +237,37 @@ else:
         df, missing_cols, available_cols = load_and_clean_data(uploaded_file)
     
     if df is None:
-        st.error(f"❌ Missing required columns: {missing_cols}")
+        st.error(f"Missing required columns: {missing_cols}")
         st.write("**Available columns in your CSV:**")
         st.write(available_cols)
         st.info("Please ensure your CSV has columns for latitude, longitude, SOG, and COG")
     else:
-        st.success(f"✅ Loaded {len(df)} data points")
+        st.success(f"Loaded {len(df)} data points")
         
         # Apply race start time filter
-        if race1_start and race1_start != "No filter - use all data":
-            df, filter_message = filter_from_start(df, race1_start)
+        if race1_start:
+            df, filter_error = filter_from_start(df, race1_start)
             
             if df is None:
-                st.error(f"❌ {filter_message}")
+                st.error(f"{filter_error}")
                 st.stop()
             else:
-                st.success(f"🏁 {filter_message}")
+                st.success(f"Filtered to {len(df)} data points from race start")
         
         # Show time range
         if 'timestamp' in df.columns:
             col1, col2 = st.columns(2)
             with col1:
-                st.info(f"📅 Start: {df['timestamp'].min()}")
+                st.info(f"Start: {df['timestamp'].min()}")
             with col2:
-                st.info(f"📅 End: {df['timestamp'].max()}")
+                st.info(f"End: {df['timestamp'].max()}")
         
         # Calculate VMG
         with st.spinner("Calculating VMG..."):
             df = calculate_vmg(df, waypoint_lat, waypoint_lon)
         
         # Statistics
-        st.markdown("## 📊 Statistics")
+        st.markdown("## Statistics")
         
         col1, col2, col3, col4 = st.columns(4)
         
@@ -370,7 +296,7 @@ else:
             st.metric("Ending Distance", f"{df['distance_to_waypoint'].iloc[-1]:.2f} NM")
         
         with col7:
-            pct_positive = len(positive_vmg) / len(df) * 100 if len(df) > 0 else 0
+            pct_positive = len(positive_vmg) / len(df) * 100
             st.metric("Positive VMG", f"{pct_positive:.1f}%")
         
         with col8:
@@ -380,7 +306,7 @@ else:
         st.markdown("---")
         
         # Charts
-        st.markdown("## 📈 Analysis Charts")
+        st.markdown("## Analysis Charts")
         
         # Check if heel data exists for tab count
         has_heel = 'heel' in df.columns
@@ -416,20 +342,20 @@ else:
         
         with tab3:
             fig3, ax3 = plt.subplots(figsize=(10, 8))
-            scatter = ax3.scatter(df['longitude'], df['latitude'], 
+            scatter = ax3.scatter(df['latitude'], df['longitude'], 
                                 c=df['VMG'], cmap='RdYlGn', 
                                 s=30, alpha=0.8)
-            ax3.plot(waypoint_lon, waypoint_lat, 'r*', markersize=20, 
+            ax3.plot(waypoint_lat, waypoint_lon, 'r*', markersize=20, 
                     label='Waypoint', markeredgecolor='black', markeredgewidth=1)
-            ax3.set_xlabel('Longitude')
-            ax3.set_ylabel('Latitude')
+            ax3.set_ylim(df['longitude'].max(), df['longitude'].min())
+            ax3.set_xlabel('Latitude')
+            ax3.set_ylabel('Longitude')
             ax3.set_title('Track (colored by VMG)')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             ax3.axis('equal')
             plt.colorbar(scatter, ax=ax3, label='VMG (knots)')
             st.pyplot(fig3)
-            plt.close(fig3)
         
         with tab4:
             fig4, ax4 = plt.subplots(figsize=(10, 5))
@@ -446,7 +372,6 @@ else:
             with tab5:
                 fig5, (ax5a, ax5b) = plt.subplots(2, 1, figsize=(10, 10))
                 
-                # Scatter plot: VMG vs Heel
                 scatter = ax5a.scatter(df['heel'], df['VMG'], 
                                       c=df['SOG'], cmap='viridis', 
                                       s=30, alpha=0.6)
@@ -458,7 +383,6 @@ else:
                 ax5a.grid(True, alpha=0.3)
                 plt.colorbar(scatter, ax=ax5a, label='SOG (knots)')
                 
-                # Calculate average VMG per heel bucket
                 df['heel_bucket'] = pd.cut(df['heel'], bins=20)
                 heel_analysis = df.groupby('heel_bucket', observed=True).agg({
                     'VMG': 'mean',
@@ -466,10 +390,8 @@ else:
                     'heel': 'mean'
                 }).dropna()
                 
-                # Line plot: Average VMG by heel angle
-                if len(heel_analysis) > 0:
-                    ax5b.plot(heel_analysis['heel'], heel_analysis['VMG'], 
-                             marker='o', linewidth=2, markersize=6, color='green', label='Avg VMG')
+                ax5b.plot(heel_analysis['heel'], heel_analysis['VMG'], 
+                         marker='o', linewidth=2, markersize=6, color='green', label='Avg VMG')
                 ax5b.axhline(y=0, color='red', linestyle='--', linewidth=1, alpha=0.5)
                 ax5b.axvline(x=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
                 ax5b.set_xlabel('Heel Angle (degrees)')
@@ -481,45 +403,43 @@ else:
                 st.pyplot(fig5)
                 plt.close(fig5)
                 
-                # Heel Statistics
-                st.markdown("### 📐 Heel Analysis")
+                st.markdown("### Heel Analysis")
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
-                    st.metric("Average Heel", f"{df['heel'].mean():.1f}°")
+                    st.metric("Average Heel", f"{df['heel'].mean():.1f} deg")
                 
                 with col2:
-                    st.metric("Max Heel", f"{df['heel'].abs().max():.1f}°")
+                    st.metric("Max Heel", f"{df['heel'].abs().max():.1f} deg")
                 
                 with col3:
                     if len(heel_analysis) > 0:
                         optimal_heel = heel_analysis.loc[heel_analysis['VMG'].idxmax(), 'heel']
-                        st.metric("Optimal Heel for VMG", f"{optimal_heel:.1f}°")
+                        st.metric("Optimal Heel for VMG", f"{optimal_heel:.1f} deg")
                 
-                # Port vs Starboard Analysis
                 port_heel = df[df['heel'] < -2]
                 stbd_heel = df[df['heel'] > 2]
                 
                 if len(port_heel) > 0 and len(stbd_heel) > 0:
-                    st.markdown("### ⚖️ Port vs Starboard")
+                    st.markdown("### Port vs Starboard")
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.write("**Port Tack** (heel < -2°)")
+                        st.write("**Port Tack** (heel < -2 deg)")
                         st.write(f"Average VMG: {port_heel['VMG'].mean():.2f} kts")
-                        st.write(f"Average Heel: {port_heel['heel'].mean():.1f}°")
+                        st.write(f"Average Heel: {port_heel['heel'].mean():.1f} deg")
                         st.write(f"Data points: {len(port_heel)}")
                     
                     with col2:
-                        st.write("**Starboard Tack** (heel > 2°)")
+                        st.write("**Starboard Tack** (heel > 2 deg)")
                         st.write(f"Average VMG: {stbd_heel['VMG'].mean():.2f} kts")
-                        st.write(f"Average Heel: {stbd_heel['heel'].mean():.1f}°")
+                        st.write(f"Average Heel: {stbd_heel['heel'].mean():.1f} deg")
                         st.write(f"Data points: {len(stbd_heel)}")
         
         st.markdown("---")
         
         # Download results
-        st.markdown("## 📥 Download Results")
+        st.markdown("## Download Results")
         
         csv_data = df.to_csv(index=False).encode('utf-8')
         
@@ -530,14 +450,9 @@ else:
             mime="text/csv"
         )
         
-        # View raw data
-        with st.expander("📋 View Raw Data"):
+        with st.expander("View Raw Data"):
             st.dataframe(df)
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style='text-align: center'>
-    <p>Built for the Vakaros Atlas 2 | Analysis of sailing performance data</p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("Built for the Vakaros Atlas 2")
