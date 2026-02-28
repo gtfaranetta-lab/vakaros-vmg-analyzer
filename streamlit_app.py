@@ -207,14 +207,67 @@ with st.sidebar:
     st.markdown("---")
     st.header("Race Start Time")
     
-    race1_start = st.text_input(
-        "Race 1 Start Time",
-        placeholder="YYYY-MM-DD HH:MM:SS",
-        help="Enter the start time of Race 1. Data before this time will be filtered out."
-    )
+    # Initialize race1_start variable
+    race1_start = None
     
-    st.markdown("---")
-    st.markdown("**Tip:** Get coordinates from Google Maps by right-clicking a location")
+    # If file is uploaded, create dropdown with available times
+    if uploaded_file is not None:
+        # Quick load to get timestamps
+        temp_df = pd.read_csv(uploaded_file)
+        
+        # Check for timestamp column
+        timestamp_cols = [col for col in temp_df.columns if 'time' in col.lower()]
+        
+        if timestamp_cols:
+            # Use first timestamp column found
+            time_col = timestamp_cols[0]
+            temp_df[time_col] = pd.to_datetime(temp_df[time_col])
+            
+            # Get min and max times
+            min_time = temp_df[time_col].min()
+            max_time = temp_df[time_col].max()
+            
+            # Create time options every 30 seconds or 1 minute
+            time_range = pd.date_range(
+                start=min_time.floor('1min'),  # Round down to nearest minute
+                end=max_time,
+                freq='30S'  # Every 30 seconds
+            )
+            
+            # Format for display
+            time_options = ["No filter - use all data"] + [t.strftime('%Y-%m-%d %H:%M:%S') for t in time_range]
+            
+            # Create dropdown
+            selected_time = st.selectbox(
+                "Select Race 1 Start Time",
+                options=time_options,
+                index=0,  # Default to "No filter"
+                help="Choose the approximate start time of Race 1 (times shown every 30 seconds)"
+            )
+            
+            # Add manual input option
+            use_manual = st.checkbox("Enter custom time instead", value=False)
+            
+            if use_manual:
+                race1_start = st.text_input(
+                    "Custom Start Time",
+                    placeholder="YYYY-MM-DD HH:MM:SS",
+                    help=f"Data ranges from {min_time.strftime('%Y-%m-%d %H:%M:%S')} to {max_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+            else:
+                # Set race1_start based on selection
+                if selected_time != "No filter - use all data":
+                    race1_start = selected_time
+            
+            # Show data time range for reference
+            st.info(f"📅 Data ranges from {min_time.strftime('%H:%M:%S')} to {max_time.strftime('%H:%M:%S')}")
+            
+        else:
+            st.warning("No timestamp column found in CSV")
+            race1_start = None
+    else:
+        st.info("Upload CSV to select race start time")
+        race1_start = None
 
 # Main content
 if uploaded_file is None:
