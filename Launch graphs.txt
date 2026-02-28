@@ -21,4 +21,6 @@ Data points:
    		WAYPOINT_LON = -80.6391035999999   # Waypoint longitude (decimal degrees)
 
     
-i want to analyze each race separately by inputting a start time and end time.
+i want to set waypoint 1 by calculating the point when direction is 100 degree variance from average wind direction for first 5 mins after start time. i want to set waypoint 2 by calculating the point when direction is 100 degree variance from average wind direction for first 5 mins after waypoint 1.
+
+vika

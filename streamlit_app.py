@@ -155,6 +155,12 @@ def filter_from_start(df, start_time_str):
     
     except Exception as e:
         return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
+     
+   # Debug: Show timestamp format
+        if 'timestamp' in df.columns:
+            st.info(f"📅 First timestamp in data: {df['timestamp'].iloc[0]}")
+            st.info(f"📅 Timestamp format example: {str(df['timestamp'].iloc[0])}")
+
 
 # ============================================================================
 # STREAMLIT APP
