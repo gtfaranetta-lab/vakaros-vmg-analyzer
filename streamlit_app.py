@@ -206,11 +206,44 @@ with st.sidebar:
     st.markdown("---")
     st.header("Race Start Time")
     
-    race1_start = st.text_input(
-        "Race 1 Start Time",
-        placeholder="YYYY-MM-DD HH:MM:SS",
-        help="Enter the start time of Race 1. Data before this time will be filtered out."
-    )
+    # Initialize race1_start variable
+    race1_start = None
+    
+    # If file is uploaded, create dropdown with available times
+    if uploaded_file is not None:
+        # Quick load to get timestamps
+        temp_df = pd.read_csv(uploaded_file)
+        
+        # Check for timestamp column
+        timestamp_cols = [col for col in temp_df.columns if 'time' in col.lower()]
+        
+        if timestamp_cols:
+            # Use first timestamp column found
+            time_col = timestamp_cols[0]
+            temp_df[time_col] = pd.to_datetime(temp_df[time_col])
+            
+            # Get unique timestamps (sample every 10th to reduce list size)
+            available_times = temp_df[time_col].iloc[::10].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
+            
+            # Add option for no filtering
+            time_options = ["No filter - use all data"] + available_times
+            
+            # Create dropdown
+            selected_time = st.selectbox(
+                "Select Race 1 Start Time",
+                options=time_options,
+                help="Choose the approximate start time of Race 1"
+            )
+            
+            # Set race1_start based on selection
+            if selected_time != "No filter - use all data":
+                race1_start = selected_time
+        else:
+            st.warning("No timestamp column found in CSV")
+            race1_start = None
+    else:
+        st.info("Upload CSV to select race start time")
+        race1_start = None
     
     st.markdown("---")
     st.markdown("**Tip:** Get coordinates from Google Maps by right-clicking a location")
