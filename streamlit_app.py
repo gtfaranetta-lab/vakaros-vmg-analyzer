@@ -205,7 +205,7 @@ with st.sidebar:
         help="Decimal degrees (West is negative)"
     )
     
-       st.markdown("---")
+    st.markdown("---")
     st.header("Race Start Time")
     
     # Initialize race1_start variable
