@@ -137,31 +137,25 @@ def load_and_clean_data(uploaded_file):
 
 def filter_from_start(df, start_time_str):
     """Filter dataframe from race start time onwards"""
-    if not start_time_str or start_time_str == "No filter - use all data":
+    if not start_time_str:
         return df, None
     
     if 'timestamp' not in df.columns:
         return df, "No timestamp column found - cannot filter by time"
     
     try:
-        # Parse timestamps and remove timezone info for simplicity
-        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
-        
-        # Parse selected time
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
         start_time = pd.to_datetime(start_time_str)
-        
-        # Filter the data
-        original_count = len(df)
         df = df[df['timestamp'] >= start_time]
         
         if len(df) == 0:
-            return None, "No data points after the selected start time"
+            return None, "No data points after the start time"
         
-        filtered_count = original_count - len(df)
-        return df, f"Filtered out {filtered_count} pre-race data points"
+        return df, None
     
     except Exception as e:
-        return None, f"Error filtering by time: {str(e)}"
+        return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
+
 # ============================================================================
 # STREAMLIT APP
 # ============================================================================
