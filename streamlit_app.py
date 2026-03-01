@@ -151,6 +151,9 @@ def filter_from_start(df, start_time_str):
         # Parse selected time
         start_time = pd.to_datetime(start_time_str)
         
+        # Filter the data
+        original_count = len(df)
+        df = df[df['timestamp'] >= start_time]
 
         if len(df) == 0:
             return None, "No data points after the start time"
