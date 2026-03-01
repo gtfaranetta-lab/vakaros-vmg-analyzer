@@ -136,8 +136,7 @@ def load_and_clean_data(uploaded_file):
     return df, None, None
 
 def filter_from_start(df, start_time_str):
-
- """Filter dataframe from race start time onwards"""
+    """Filter dataframe from race start time onwards"""
     if not start_time_str or start_time_str == "No filter - use all data":
         return df, None
 
