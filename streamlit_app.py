@@ -145,9 +145,11 @@ def filter_from_start(df, start_time_str):
 
     
     try:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        # Parse timestamps and remove timezone info for simplicity
+        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
+        
+        # Parse selected time
         start_time = pd.to_datetime(start_time_str)
-        df = df[df['timestamp'] >= start_time]
         
         if len(df) == 0:
             return None, "No data points after the start time"
