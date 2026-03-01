@@ -154,14 +154,15 @@ def filter_from_start(df, start_time_str):
         # Filter the data
         original_count = len(df)
         df = df[df['timestamp'] >= start_time]
-
-        if len(df) == 0:
-            return None, "No data points after the start time"
         
-        return df, None
+        if len(df) == 0:
+            return None, "No data points after the selected start time"
+        
+        filtered_count = original_count - len(df)
+        return df, f"Filtered out {filtered_count} pre-race data points"
     
     except Exception as e:
-        return None, f"Error parsing time: {str(e)}. Use format: YYYY-MM-DD HH:MM:SS"
+        return None, f"Error filtering by time: {str(e)}"
 
 # ============================================================================
 # STREAMLIT APP
