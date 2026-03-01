@@ -136,10 +136,14 @@ def load_and_clean_data(uploaded_file):
     return df, None, None
 
 def filter_from_start(df, start_time_str):
-    """Filter dataframe from race start time onwards"""
-    if not start_time_str:
-        return df, None
+
     
+ """Filter dataframe from race start time onwards"""
+    if not start_time_str or start_time_str == "No filter - use all data":
+        return df, None
+
+
+
     if 'timestamp' not in df.columns:
         return df, "No timestamp column found - cannot filter by time"
     
