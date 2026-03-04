@@ -634,26 +634,122 @@ else:
             tab1, tab2, tab3, tab4 = st.tabs(["VMG Over Time", "SOG vs VMG", "Track Map", "Distance to Waypoint"])
         
         with tab3:
-            fig3, ax3 = plt.subplots(figsize=(10, 8))
-            scatter = ax3.scatter(df['latitude'], df['longitude'], 
+            fig3, ax3 = plt.subplots(figsize=(10, 10))
+            
+            # Calculate center point between waypoints for rotation reference
+            if waypoint2_lat is not None and waypoint2_lon is not None:
+                center_lat = (waypoint1_lat + waypoint2_lat) / 2
+                center_lon = (waypoint1_lon + waypoint2_lon) / 2
+                
+                # Calculate angle from WP2 to WP1
+                angle_to_wp1 = np.arctan2(waypoint1_lat - waypoint2_lat, 
+                                          waypoint1_lon - waypoint2_lon)
+                # Rotation needed to put WP1 at top (90 degrees or PI/2 radians)
+                rotation_angle = np.pi/2 - angle_to_wp1
+            else:
+                # If only WP1, use data center
+                center_lat = df['latitude'].mean()
+                center_lon = df['longitude'].mean()
+                rotation_angle = 0
+            
+            # Function to rotate points around center
+            def rotate_point(lat, lon, center_lat, center_lon, angle):
+                # Convert to relative coordinates
+                rel_lat = lat - center_lat
+                rel_lon = lon - center_lon
+                
+                # Apply rotation
+                rot_lon = rel_lon * np.cos(angle) - rel_lat * np.sin(angle)
+                rot_lat = rel_lon * np.sin(angle) + rel_lat * np.cos(angle)
+                
+                return rot_lon, rot_lat
+            
+            # Rotate track data
+            rotated_track = [rotate_point(lat, lon, center_lat, center_lon, rotation_angle) 
+                           for lat, lon in zip(df['latitude'], df['longitude'])]
+            track_x = [p[0] for p in rotated_track]
+            track_y = [p[1] for p in rotated_track]
+            
+            # Rotate waypoint positions
+            wp1_x, wp1_y = rotate_point(waypoint1_lat, waypoint1_lon, 
+                                       center_lat, center_lon, rotation_angle)
+            
+            if waypoint2_lat is not None:
+                wp2_x, wp2_y = rotate_point(waypoint2_lat, waypoint2_lon, 
+                                           center_lat, center_lon, rotation_angle)
+            
+            # Plot rotated track
+            scatter = ax3.scatter(track_x, track_y, 
                                 c=df['VMG'], cmap='RdYlGn', 
                                 s=30, alpha=0.8)
             
-            # Plot both waypoints if available
-            ax3.plot(waypoint1_lat, waypoint1_lon, 'r*', markersize=20, 
-                    label='WP1 (Windward)', markeredgecolor='black', markeredgewidth=1)
+            # Plot waypoints with WP1 at top
+            ax3.plot(wp1_x, wp1_y, 'r*', markersize=25, 
+                    label='WP1 (Windward)', markeredgecolor='black', 
+                    markeredgewidth=2, zorder=5)
             
             if waypoint2_lat is not None:
-                ax3.plot(waypoint2_lat, waypoint2_lon, 'b*', markersize=20, 
-                        label='WP2 (Leeward)', markeredgecolor='black', markeredgewidth=1)
+                ax3.plot(wp2_x, wp2_y, 'b*', markersize=25, 
+                        label='WP2 (Leeward)', markeredgecolor='black', 
+                        markeredgewidth=2, zorder=5)
+                
+                # Draw course axis line
+                ax3.plot([wp2_x, wp1_x], [wp2_y, wp1_y], 
+                        'k--', alpha=0.3, linewidth=1, zorder=1)
             
-            ax3.set_xlabel('Latitude')
-            ax3.set_ylabel('Longitude')
-            ax3.set_title(f'Track (colored by VMG to {active_waypoint_name})')
-            ax3.legend()
-            ax3.grid(True, alpha=0.3)
-            ax3.axis('equal')
-            plt.colorbar(scatter, ax=ax3, label='VMG (knots)')
+            # Add start/finish area if race start time was used
+            if race1_start and race1_start != "No filter - use all data":
+                # Mark approximate start position (first few points)
+                if len(track_x) > 5:
+                    ax3.plot(track_x[0], track_y[0], 'go', markersize=10, 
+                           label='Start', markeredgecolor='darkgreen', 
+                           markeredgewidth=1, zorder=4)
+            
+            # Labels and formatting
+            ax3.set_xlabel('← Port          Starboard →', fontsize=12)
+            ax3.set_ylabel('↑ Upwind (Windward)\n\n↓ Downwind (Leeward)', fontsize=12)
+            ax3.set_title(f'Race Course Track (colored by VMG to {active_waypoint_name})', 
+                         fontsize=14, fontweight='bold')
+            
+            # Add wind arrow at top
+            ax_height = ax3.get_ylim()[1] - ax3.get_ylim()[0]
+            arrow_y = ax3.get_ylim()[1] - ax_height * 0.05
+            arrow_x = (ax3.get_xlim()[0] + ax3.get_xlim()[1]) / 2
+            ax3.annotate('', xy=(arrow_x, arrow_y - ax_height * 0.08), 
+                        xytext=(arrow_x, arrow_y),
+                        arrowprops=dict(arrowstyle='->', lw=3, color='blue'))
+            ax3.text(arrow_x, arrow_y + ax_height * 0.02, 'WIND', 
+                    ha='center', fontsize=12, color='blue', fontweight='bold')
+            
+            # Equal aspect ratio for accurate representation
+            ax3.set_aspect('equal', adjustable='box')
+            
+            # Grid and legend
+            ax3.grid(True, alpha=0.3, linestyle=':')
+            ax3.legend(loc='upper left', framealpha=0.9)
+            
+            # Colorbar
+            cbar = plt.colorbar(scatter, ax=ax3, label='VMG (knots)', 
+                              orientation='vertical', pad=0.02)
+            cbar.ax.tick_params(labelsize=10)
+            
+            # Remove axis values as they're now relative positions
+            ax3.set_xticks([])
+            ax3.set_yticks([])
+            
+            # Add reference grid lines through waypoints
+            if waypoint2_lat is not None:
+                # Laylines (approximate)
+                spread = max(abs(max(track_x) - min(track_x)), 
+                           abs(max(track_y) - min(track_y))) * 0.3
+                
+                # Port layline from WP2
+                ax3.plot([wp2_x - spread, wp1_x - spread/3], 
+                        [wp2_y, wp1_y], 'r:', alpha=0.2, linewidth=1)
+                # Starboard layline from WP2
+                ax3.plot([wp2_x + spread, wp1_x + spread/3], 
+                        [wp2_y, wp1_y], 'g:', alpha=0.2, linewidth=1)
+            
             st.pyplot(fig3)
             plt.close(fig3)
         
