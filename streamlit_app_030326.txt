@@ -90,15 +90,26 @@ def calculate_vmg(df, waypoint_lat, waypoint_lon):
 
 def detect_windward_mark(df, start_time_str, variance_threshold=100):
     """
-    Auto-detect windward mark (Waypoint 1) based on course change from initial heading
+    Auto-detect windward mark based on course change from initial heading
+    
+    Parameters:
+    - df: DataFrame with timestamp, latitude, longitude, COG
+    - start_time_str: Race start time
+    - variance_threshold: Degrees of course change to detect mark rounding (default 100)
+    
+    Returns:
+    - (lat, lon) of detected mark or None if not found
+    - detection_info: Dictionary with detection details
     """
     
     if 'timestamp' not in df.columns or 'COG' not in df.columns:
         return None, {"error": "Missing required columns for auto-detection"}
     
     try:
+        # Ensure timestamp is parsed
         df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
         
+        # Parse start time
         if start_time_str and start_time_str != "No filter - use all data":
             start_time = pd.to_datetime(start_time_str)
         else:
@@ -120,7 +131,7 @@ def detect_windward_mark(df, start_time_str, variance_threshold=100):
         if len(later_data) == 0:
             return None, {"error": "No data after initial 5 minutes"}
         
-        later_data = later_data.copy()
+        # Calculate course difference from initial average for each point
         later_data['course_diff'] = later_data['COG'].apply(
             lambda x: min(abs(x - avg_initial_course), 
                          360 - abs(x - avg_initial_course))
@@ -132,11 +143,13 @@ def detect_windward_mark(df, start_time_str, variance_threshold=100):
         if len(mark_candidates) == 0:
             return None, {"error": f"No course change >= {variance_threshold}° detected"}
         
+        # Get the first significant course change point
         mark_index = mark_candidates.index[0]
         
         # Use a few points before the course change as the mark location
+        # (boat rounds the mark then changes course)
         if mark_index > 5:
-            mark_index -= 5
+            mark_index -= 5  # Go back 5 data points
         
         mark_lat = df.loc[mark_index, 'latitude']
         mark_lon = df.loc[mark_index, 'longitude']
@@ -150,92 +163,13 @@ def detect_windward_mark(df, start_time_str, variance_threshold=100):
             "mark_time": mark_time,
             "avg_initial_course": avg_initial_course,
             "course_change": course_change,
-            "detection_index": mark_index
+            "detection_point": mark_index
         }
         
         return (mark_lat, mark_lon), detection_info
         
     except Exception as e:
         return None, {"error": f"Detection failed: {str(e)}"}
-
-def detect_leeward_mark(df, waypoint1_info, variance_threshold=100):
-    """
-    Auto-detect leeward mark (Waypoint 2) based on course change after Waypoint 1
-    """
-    
-    if not waypoint1_info.get('detected'):
-        return None, {"error": "Waypoint 1 must be detected first"}
-    
-    if 'timestamp' not in df.columns or 'COG' not in df.columns:
-        return None, {"error": "Missing required columns for auto-detection"}
-    
-    try:
-        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
-        
-        # Start from waypoint 1 detection point
-        wp1_index = waypoint1_info['detection_index']
-        wp1_time = waypoint1_info['mark_time']
-        
-        # Get data from waypoint 1 onwards
-        df_after_wp1 = df[df.index >= wp1_index].copy()
-        
-        if len(df_after_wp1) < 20:
-            return None, {"error": "Not enough data after Waypoint 1"}
-        
-        # Get first 5 minutes after Waypoint 1 (downwind leg)
-        five_min_after = wp1_time + pd.Timedelta(minutes=5)
-        downwind_data = df_after_wp1[(df_after_wp1['timestamp'] >= wp1_time) & 
-                                     (df_after_wp1['timestamp'] <= five_min_after)]
-        
-        if len(downwind_data) < 10:
-            return None, {"error": "Not enough data in first 5 minutes after Waypoint 1"}
-        
-        # Calculate average downwind course
-        avg_downwind_course = downwind_data['COG'].mean()
-        
-        # Look for significant course change after the downwind leg
-        later_data = df_after_wp1[df_after_wp1['timestamp'] > five_min_after]
-        
-        if len(later_data) == 0:
-            return None, {"error": "No data after downwind leg"}
-        
-        later_data = later_data.copy()
-        later_data['course_diff'] = later_data['COG'].apply(
-            lambda x: min(abs(x - avg_downwind_course), 
-                         360 - abs(x - avg_downwind_course))
-        )
-        
-        # Find first point where course changes by threshold amount
-        mark_candidates = later_data[later_data['course_diff'] >= variance_threshold]
-        
-        if len(mark_candidates) == 0:
-            return None, {"error": f"No course change >= {variance_threshold}° detected after Waypoint 1"}
-        
-        mark_index = mark_candidates.index[0]
-        
-        # Use a few points before the course change as the mark location
-        if mark_index > 5:
-            mark_index -= 5
-        
-        mark_lat = df.loc[mark_index, 'latitude']
-        mark_lon = df.loc[mark_index, 'longitude']
-        mark_time = df.loc[mark_index, 'timestamp']
-        course_change = mark_candidates.iloc[0]['course_diff']
-        
-        detection_info = {
-            "detected": True,
-            "mark_lat": mark_lat,
-            "mark_lon": mark_lon,
-            "mark_time": mark_time,
-            "avg_downwind_course": avg_downwind_course,
-            "course_change": course_change,
-            "detection_index": mark_index
-        }
-        
-        return (mark_lat, mark_lon), detection_info
-        
-    except Exception as e:
-        return None, {"error": f"Waypoint 2 detection failed: {str(e)}"}
 
 # ============================================================================
 # DATA LOADING AND PROCESSING
@@ -274,6 +208,10 @@ def load_and_clean_data(uploaded_file):
         'Time': 'timestamp', 
         'timestamp': 'timestamp', 
         'Timestamp': 'timestamp',
+        'twd': 'TWD',
+        'TWD': 'TWD',
+        'true_wind_direction': 'TWD',
+        'wind_direction': 'TWD',
     }
     
     df.rename(columns=column_mappings, inplace=True)
@@ -297,9 +235,13 @@ def filter_from_start(df, start_time_str):
         return df, "No timestamp column found - cannot filter by time"
     
     try:
+        # Parse timestamps and remove timezone info for simplicity
         df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)
+        
+        # Parse selected time
         start_time = pd.to_datetime(start_time_str)
         
+        # Filter the data
         original_count = len(df)
         df = df[df['timestamp'] >= start_time]
         
@@ -326,19 +268,11 @@ st.title("⛵ Vakaros Atlas 2 VMG Analyzer")
 st.markdown("**Analyze Velocity Made Good (VMG) from your Atlas 2 GPS sailing data**")
 st.markdown("---")
 
-# Initialize session state
-if 'waypoint1_lat' not in st.session_state:
-    st.session_state.waypoint1_lat = 42.3601
-if 'waypoint1_lon' not in st.session_state:
-    st.session_state.waypoint1_lon = -71.0589
-if 'waypoint2_lat' not in st.session_state:
-    st.session_state.waypoint2_lat = None
-if 'waypoint2_lon' not in st.session_state:
-    st.session_state.waypoint2_lon = None
-if 'wp1_info' not in st.session_state:
-    st.session_state.wp1_info = {}
-if 'wp2_info' not in st.session_state:
-    st.session_state.wp2_info = {}
+# Initialize session state for waypoint
+if 'waypoint_lat' not in st.session_state:
+    st.session_state.waypoint_lat = 42.3601
+if 'waypoint_lon' not in st.session_state:
+    st.session_state.waypoint_lon = -71.0589
 
 # Sidebar
 with st.sidebar:
@@ -350,51 +284,33 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    st.header("📍 Waypoints")
+    st.header("📍 Waypoint")
     
+    # Waypoint selection method
     waypoint_method = st.radio(
         "Waypoint Selection Method",
-        ["Manual Entry", "Auto-Detect Marks"],
-        help="Auto-detect finds marks based on course changes"
+        ["Manual Entry", "Auto-Detect Windward Mark"],
+        help="Auto-detect finds the windward mark based on course change"
     )
     
     if waypoint_method == "Manual Entry":
-        st.subheader("Waypoint 1 (Windward Mark)")
-        waypoint1_lat = st.number_input(
-            "WP1 Latitude",
-            value=st.session_state.waypoint1_lat,
+        waypoint_lat = st.number_input(
+            "Latitude",
+            value=st.session_state.waypoint_lat,
             format="%.6f",
             help="Decimal degrees (North is positive)"
         )
         
-        waypoint1_lon = st.number_input(
-            "WP1 Longitude",
-            value=st.session_state.waypoint1_lon,
+        waypoint_lon = st.number_input(
+            "Longitude",
+            value=st.session_state.waypoint_lon,
             format="%.6f",
             help="Decimal degrees (West is negative)"
         )
-        
-        st.subheader("Waypoint 2 (Leeward Mark)")
-        use_wp2 = st.checkbox("Add Waypoint 2", value=False)
-        
-        if use_wp2:
-            waypoint2_lat = st.number_input(
-                "WP2 Latitude",
-                value=42.3500 if st.session_state.waypoint2_lat is None else st.session_state.waypoint2_lat,
-                format="%.6f"
-            )
-            
-            waypoint2_lon = st.number_input(
-                "WP2 Longitude",
-                value=-71.0600 if st.session_state.waypoint2_lon is None else st.session_state.waypoint2_lon,
-                format="%.6f"
-            )
-        else:
-            waypoint2_lat = None
-            waypoint2_lon = None
     else:
-        st.info("🎯 Waypoints will be auto-detected based on course changes")
+        st.info("🎯 Waypoint will be auto-detected after selecting race start time")
         
+        # Auto-detection parameters
         with st.expander("Auto-Detection Settings"):
             course_change_threshold = st.slider(
                 "Course Change Threshold (degrees)",
@@ -406,55 +322,52 @@ with st.sidebar:
             )
             
             st.markdown("""
-            **Detection Process:**
-            1. **Waypoint 1:** Detected when course changes by threshold after first 5 min upwind
-            2. **Waypoint 2:** Detected when course changes by threshold after first 5 min downwind from WP1
+            **How it works:**
+            1. Calculates average course for first 5 minutes after start
+            2. Detects when boat changes course by threshold amount
+            3. Sets that position as the windward mark
             """)
         
-        waypoint1_lat = st.session_state.waypoint1_lat
-        waypoint1_lon = st.session_state.waypoint1_lon
-        waypoint2_lat = st.session_state.waypoint2_lat
-        waypoint2_lon = st.session_state.waypoint2_lon
-    
-    # Waypoint selection for analysis
-    st.markdown("---")
-    st.header("📊 Analysis Target")
-    
-    if waypoint_method == "Auto-Detect Marks" or (waypoint_method == "Manual Entry" and use_wp2):
-        analyze_waypoint = st.radio(
-            "Analyze VMG to:",
-            ["Waypoint 1 (Windward)", "Waypoint 2 (Leeward)"],
-            help="Select which waypoint to analyze VMG toward"
-        )
-    else:
-        analyze_waypoint = "Waypoint 1 (Windward)"
+        waypoint_lat = st.session_state.waypoint_lat
+        waypoint_lon = st.session_state.waypoint_lon
     
     st.markdown("---")
     st.header("🏁 Race Start Time")
     
+    # Initialize race1_start variable
     race1_start = None
     
+    # If file is uploaded, create dropdown with available times
     if uploaded_file is not None:
+        # Quick load to get timestamps
         temp_df = pd.read_csv(uploaded_file)
+        
+        # IMPORTANT: Reset file pointer after reading
         uploaded_file.seek(0)
         
+        # Check for timestamp column
         timestamp_cols = [col for col in temp_df.columns if 'time' in col.lower()]
         
         if timestamp_cols:
+            # Use first timestamp column found
             time_col = timestamp_cols[0]
             temp_df[time_col] = pd.to_datetime(temp_df[time_col])
             
+            # Get min and max times
             min_time = temp_df[time_col].min()
             max_time = temp_df[time_col].max()
             
+            # Create time options every 30 seconds
             time_range = pd.date_range(
                 start=min_time.floor('1min'),
                 end=max_time,
                 freq='30S'
             )
             
+            # Format for display
             time_options = ["No filter - use all data"] + [t.strftime('%Y-%m-%d %H:%M:%S') for t in time_range]
             
+            # Create dropdown
             selected_time = st.selectbox(
                 "Select Race 1 Start Time",
                 options=time_options,
@@ -462,6 +375,7 @@ with st.sidebar:
                 help="Choose the approximate start time of Race 1"
             )
             
+            # Add manual input option
             use_manual = st.checkbox("Enter custom time instead", value=False)
             
             if use_manual:
@@ -474,12 +388,17 @@ with st.sidebar:
                 if selected_time != "No filter - use all data":
                     race1_start = selected_time
             
-            st.info(f"📅 Data: {min_time.strftime('%H:%M:%S')} to {max_time.strftime('%H:%M:%S')}")
+            st.info(f"📅 Data ranges from {min_time.strftime('%H:%M:%S')} to {max_time.strftime('%H:%M:%S')}")
+            
         else:
             st.warning("No timestamp column found in CSV")
             race1_start = None
     else:
         st.info("Upload CSV to select race start time")
+        race1_start = None
+    
+    st.markdown("---")
+    st.markdown("**💡 Tip:** Get coordinates from Google Maps by right-clicking a location")
 
 # Main content
 if uploaded_file is None:
@@ -487,24 +406,31 @@ if uploaded_file is None:
     
     st.markdown("### 📋 How to Use")
     st.markdown("""
-    1. **Export data** from Vakaros Connect app
+    1. **Export data** from Vakaros Connect app (Sessions → Export → CSV)
     2. **Upload the CSV** using the sidebar
     3. **Choose waypoint method:**
        - Manual: Enter coordinates directly
-       - Auto-detect: Automatically finds both marks
-    4. **Select Race 1 start time**
-    5. **View analysis** for upwind and downwind legs
+       - Auto-detect: Automatically finds windward mark
+    4. **Select Race 1 start time** to filter pre-race data
+    5. **View instant analysis** with charts and statistics
+    6. **Download results** as a new CSV file
     """)
     
-    st.markdown("### 🎯 Auto-Detection Features")
+    st.markdown("### 🎯 Auto-Detection Feature")
     st.markdown("""
-    **Waypoint 1 (Windward Mark):**
-    - Detected when boat bears away after upwind leg
-    - Based on course change from average heading in first 5 min
+    The **Auto-Detect Windward Mark** feature:
+    - Analyzes your course for the first 5 minutes after start (typically upwind)
+    - Detects when you bear away significantly (default: 100°)
+    - Sets that position as the windward mark
+    - Perfect for standard windward-leeward courses
+    """)
     
-    **Waypoint 2 (Leeward Mark):**
-    - Detected when boat rounds up after downwind leg
-    - Based on course change from average heading after WP1
+    st.markdown("### 📊 What is VMG?")
+    st.markdown("""
+    **Velocity Made Good (VMG)** measures how fast you're moving toward a waypoint.
+    
+    - **Positive VMG** = Moving toward the waypoint ✅
+    - **Negative VMG** = Moving away from the waypoint ❌
     """)
 
 else:
@@ -515,60 +441,34 @@ else:
         st.error(f"❌ Missing required columns: {missing_cols}")
         st.write("**Available columns in your CSV:**")
         st.write(available_cols)
+        st.info("Please ensure your CSV has columns for latitude, longitude, SOG, and COG")
     else:
         st.success(f"✅ Loaded {len(df)} data points")
         
-        # Auto-detect waypoints if selected
-        if waypoint_method == "Auto-Detect Marks":
+        # Auto-detect waypoint if selected
+        if waypoint_method == "Auto-Detect Windward Mark":
             if race1_start and race1_start != "No filter - use all data":
-                
-                # Detect Waypoint 1
-                with st.spinner("🔍 Detecting Waypoint 1 (Windward Mark)..."):
-                    detected_wp1, wp1_info = detect_windward_mark(
+                with st.spinner("🔍 Detecting windward mark..."):
+                    detected_waypoint, detection_info = detect_windward_mark(
                         df, race1_start, course_change_threshold
                     )
                     
-                    if detected_wp1:
-                        waypoint1_lat, waypoint1_lon = detected_wp1
-                        st.session_state.waypoint1_lat = waypoint1_lat
-                        st.session_state.waypoint1_lon = waypoint1_lon
-                        st.session_state.wp1_info = wp1_info
+                    if detected_waypoint:
+                        waypoint_lat, waypoint_lon = detected_waypoint
+                        st.session_state.waypoint_lat = waypoint_lat
+                        st.session_state.waypoint_lon = waypoint_lon
                         
-                        st.success(f"🎯 Waypoint 1 detected at: {waypoint1_lat:.6f}, {waypoint1_lon:.6f}")
+                        st.success(f"🎯 Windward mark detected at: {waypoint_lat:.6f}, {waypoint_lon:.6f}")
                         
-                        # Detect Waypoint 2
-                        with st.spinner("🔍 Detecting Waypoint 2 (Leeward Mark)..."):
-                            detected_wp2, wp2_info = detect_leeward_mark(
-                                df, wp1_info, course_change_threshold
-                            )
-                            
-                            if detected_wp2:
-                                waypoint2_lat, waypoint2_lon = detected_wp2
-                                st.session_state.waypoint2_lat = waypoint2_lat
-                                st.session_state.waypoint2_lon = waypoint2_lon
-                                st.session_state.wp2_info = wp2_info
-                                
-                                st.success(f"🎯 Waypoint 2 detected at: {waypoint2_lat:.6f}, {waypoint2_lon:.6f}")
-                                
-                                # Show detection summary
-                                with st.expander("Detection Details"):
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        st.write("**Waypoint 1 (Windward):**")
-                                        st.write(f"- Initial avg course: {wp1_info['avg_initial_course']:.1f}°")
-                                        st.write(f"- Course change: {wp1_info['course_change']:.1f}°")
-                                        st.write(f"- Time: {wp1_info['mark_time']}")
-                                    with col2:
-                                        st.write("**Waypoint 2 (Leeward):**")
-                                        st.write(f"- Downwind avg course: {wp2_info['avg_downwind_course']:.1f}°")
-                                        st.write(f"- Course change: {wp2_info['course_change']:.1f}°")
-                                        st.write(f"- Time: {wp2_info['mark_time']}")
-                            else:
-                                st.warning(f"⚠️ Could not detect Waypoint 2: {wp2_info.get('error')}")
+                        with st.expander("Detection Details"):
+                            st.write(f"**Initial avg course:** {detection_info['avg_initial_course']:.1f}°")
+                            st.write(f"**Course change detected:** {detection_info['course_change']:.1f}°")
+                            st.write(f"**Mark rounding time:** {detection_info['mark_time']}")
                     else:
-                        st.warning(f"⚠️ Could not detect Waypoint 1: {wp1_info.get('error')}")
+                        st.warning(f"⚠️ Could not auto-detect mark: {detection_info.get('error', 'Unknown error')}")
+                        st.info("Using default waypoint coordinates")
             else:
-                st.warning("⚠️ Please select a race start time for auto-detection")
+                st.warning("⚠️ Please select a race start time for auto-detection to work")
         
         # Apply race start time filter
         if race1_start and race1_start != "No filter - use all data":
@@ -580,19 +480,10 @@ else:
             else:
                 st.success(f"🏁 {filter_message}")
         
-        # Select which waypoint to analyze
-        if analyze_waypoint == "Waypoint 2 (Leeward)" and waypoint2_lat is not None:
-            active_waypoint_lat = waypoint2_lat
-            active_waypoint_lon = waypoint2_lon
-            active_waypoint_name = "Waypoint 2 (Leeward)"
-        else:
-            active_waypoint_lat = waypoint1_lat
-            active_waypoint_lon = waypoint1_lon
-            active_waypoint_name = "Waypoint 1 (Windward)"
+        # Show current waypoint
+        st.info(f"📍 Using waypoint: {waypoint_lat:.6f}, {waypoint_lon:.6f}")
         
-        st.info(f"📍 Analyzing VMG to {active_waypoint_name}: {active_waypoint_lat:.6f}, {active_waypoint_lon:.6f}")
-        
-        # Show time range
+        # Show time range if timestamp exists
         if 'timestamp' in df.columns:
             col1, col2 = st.columns(2)
             with col1:
@@ -602,7 +493,7 @@ else:
         
         # Calculate VMG
         with st.spinner("Calculating VMG..."):
-            df = calculate_vmg(df, active_waypoint_lat, active_waypoint_lon)
+            df = calculate_vmg(df, waypoint_lat, waypoint_lon)
         
         # Statistics
         st.markdown("## 📊 Statistics")
@@ -622,10 +513,31 @@ else:
             distance_gained = df['distance_to_waypoint'].iloc[0] - df['distance_to_waypoint'].iloc[-1]
             st.metric("Distance Gained", f"{distance_gained:.2f} NM")
         
-        # Charts
+        col5, col6, col7, col8 = st.columns(4)
+        
+        positive_vmg = df[df['VMG'] > 0]
+        negative_vmg = df[df['VMG'] < 0]
+        
+        with col5:
+            st.metric("Starting Distance", f"{df['distance_to_waypoint'].iloc[0]:.2f} NM")
+        
+        with col6:
+            st.metric("Ending Distance", f"{df['distance_to_waypoint'].iloc[-1]:.2f} NM")
+        
+        with col7:
+            pct_positive = len(positive_vmg) / len(df) * 100 if len(df) > 0 else 0
+            st.metric("Positive VMG", f"{pct_positive:.1f}%")
+        
+        with col8:
+            if len(positive_vmg) > 0:
+                st.metric("Avg Positive VMG", f"{positive_vmg['VMG'].mean():.2f} kts")
+        
         st.markdown("---")
+        
+        # Charts (rest of the code remains the same)
         st.markdown("## 📈 Analysis Charts")
         
+        # Check if heel data exists for tab count
         has_heel = 'heel' in df.columns
         
         if has_heel:
@@ -633,31 +545,6 @@ else:
         else:
             tab1, tab2, tab3, tab4 = st.tabs(["VMG Over Time", "SOG vs VMG", "Track Map", "Distance to Waypoint"])
         
-        with tab3:
-            fig3, ax3 = plt.subplots(figsize=(10, 8))
-            scatter = ax3.scatter(df['longitude'], df['latitude'], 
-                                c=df['VMG'], cmap='RdYlGn', 
-                                s=30, alpha=0.8)
-            
-            # Plot both waypoints if available
-            ax3.plot(waypoint1_lon, waypoint1_lat, 'r*', markersize=20, 
-                    label='WP1 (Windward)', markeredgecolor='black', markeredgewidth=1)
-            
-            if waypoint2_lat is not None:
-                ax3.plot(waypoint2_lon, waypoint2_lat, 'b*', markersize=20, 
-                        label='WP2 (Leeward)', markeredgecolor='black', markeredgewidth=1)
-            
-            ax3.set_xlabel('Longitude')
-            ax3.set_ylabel('Latitude')
-            ax3.set_title(f'Track (colored by VMG to {active_waypoint_name})')
-            ax3.legend()
-            ax3.grid(True, alpha=0.3)
-            ax3.axis('equal')
-            plt.colorbar(scatter, ax=ax3, label='VMG (knots)')
-            st.pyplot(fig3)
-            plt.close(fig3)
-        
-        # Rest of the tabs remain the same...
         with tab1:
             fig1, ax1 = plt.subplots(figsize=(10, 5))
             colors = ['green' if v > 0 else 'red' for v in df['VMG']]
@@ -665,7 +552,7 @@ else:
             ax1.axhline(y=0, color='black', linestyle='--', linewidth=1)
             ax1.set_xlabel('Data Point')
             ax1.set_ylabel('VMG (knots)')
-            ax1.set_title(f'VMG to {active_waypoint_name} Over Time')
+            ax1.set_title('VMG to Waypoint Over Time')
             ax1.grid(True, alpha=0.3)
             st.pyplot(fig1)
             plt.close(fig1)
@@ -682,12 +569,40 @@ else:
             st.pyplot(fig2)
             plt.close(fig2)
         
+        with tab3:
+            fig3, ax3 = plt.subplots(figsize=(10, 8))
+            scatter = ax3.scatter(df['latitude'], df['longitude'], 
+                                c=df['VMG'], cmap='RdYlGn', 
+                                s=30, alpha=0.8)
+            ax3.plot(waypoint_lat, waypoint_lon, 'r*', markersize=20, 
+                    label='Waypoint', markeredgecolor='black', markeredgewidth=1)
+          
+            # Mark detection point if auto-detected
+            if waypoint_method == "Auto-Detect Windward Mark" and 'detection_info' in locals():
+                if detection_info.get('detected'):
+                    ax3.annotate('Mark Detected', 
+                               xy=(waypoint_lon, waypoint_lat),
+                               xytext=(10, 10), textcoords='offset points',
+                               fontsize=9, color='red',
+                               arrowprops=dict(arrowstyle='->', color='red', lw=1))
+            
+            ax3.set_ylim(df['longitude'].max(), df['longitude'].min())
+            ax3.set_xlabel('Latitude')
+            ax3.set_ylabel('Longitude')
+            ax3.set_title('Track (colored by VMG)')
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            ax3.axis('equal')
+            plt.colorbar(scatter, ax=ax3, label='VMG (knots)')
+            st.pyplot(fig3)
+
+        
         with tab4:
             fig4, ax4 = plt.subplots(figsize=(10, 5))
             ax4.plot(df.index, df['distance_to_waypoint'], color='purple', linewidth=2)
             ax4.set_xlabel('Data Point')
             ax4.set_ylabel('Distance (NM)')
-            ax4.set_title(f'Distance to {active_waypoint_name} Over Time')
+            ax4.set_title('Distance to Waypoint Over Time')
             ax4.grid(True, alpha=0.3)
             ax4.fill_between(df.index, df['distance_to_waypoint'], alpha=0.3, color='purple')
             st.pyplot(fig4)
@@ -704,7 +619,7 @@ else:
                 ax5a.axvline(x=0, color='black', linestyle='-', linewidth=1, alpha=0.3)
                 ax5a.set_xlabel('Heel Angle (degrees)')
                 ax5a.set_ylabel('VMG (knots)')
-                ax5a.set_title(f'VMG to {active_waypoint_name} vs Heel Angle')
+                ax5a.set_title('VMG vs Heel Angle (colored by SOG)')
                 ax5a.grid(True, alpha=0.3)
                 plt.colorbar(scatter, ax=ax5a, label='SOG (knots)')
                 
@@ -728,6 +643,39 @@ else:
                 
                 st.pyplot(fig5)
                 plt.close(fig5)
+                
+                st.markdown("### 📐 Heel Analysis")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Average Heel", f"{df['heel'].mean():.1f}°")
+                
+                with col2:
+                    st.metric("Max Heel", f"{df['heel'].abs().max():.1f}°")
+                
+                with col3:
+                    if len(heel_analysis) > 0:
+                        optimal_heel = heel_analysis.loc[heel_analysis['VMG'].idxmax(), 'heel']
+                        st.metric("Optimal Heel for VMG", f"{optimal_heel:.1f}°")
+                
+                port_heel = df[df['heel'] < -2]
+                stbd_heel = df[df['heel'] > 2]
+                
+                if len(port_heel) > 0 and len(stbd_heel) > 0:
+                    st.markdown("### ⚖️ Port vs Starboard")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Port Tack** (heel < -2°)")
+                        st.write(f"Average VMG: {port_heel['VMG'].mean():.2f} kts")
+                        st.write(f"Average Heel: {port_heel['heel'].mean():.1f}°")
+                        st.write(f"Data points: {len(port_heel)}")
+                    
+                    with col2:
+                        st.write("**Starboard Tack** (heel > 2°)")
+                        st.write(f"Average VMG: {stbd_heel['VMG'].mean():.2f} kts")
+                        st.write(f"Average Heel: {stbd_heel['heel'].mean():.1f}°")
+                        st.write(f"Data points: {len(stbd_heel)}")
         
         st.markdown("---")
         
@@ -742,6 +690,9 @@ else:
             file_name="vmg_analysis_results.csv",
             mime="text/csv"
         )
+        
+        with st.expander("📋 View Raw Data"):
+            st.dataframe(df)
 
 # Footer
 st.markdown("---")
