@@ -635,20 +635,20 @@ else:
         
         with tab3:
             fig3, ax3 = plt.subplots(figsize=(10, 8))
-            scatter = ax3.scatter(df['longitude'], df['latitude'], 
+            scatter = ax3.scatter(df['latitude'], df['longitude'], 
                                 c=df['VMG'], cmap='RdYlGn', 
                                 s=30, alpha=0.8)
             
             # Plot both waypoints if available
-            ax3.plot(waypoint1_lon, waypoint1_lat, 'r*', markersize=20, 
+            ax3.plot(waypoint1_lat, waypoint1_lon, 'r*', markersize=20, 
                     label='WP1 (Windward)', markeredgecolor='black', markeredgewidth=1)
             
             if waypoint2_lat is not None:
-                ax3.plot(waypoint2_lon, waypoint2_lat, 'b*', markersize=20, 
+                ax3.plot(waypoint2_lat, waypoint2_lon, 'b*', markersize=20, 
                         label='WP2 (Leeward)', markeredgecolor='black', markeredgewidth=1)
             
-            ax3.set_xlabel('Longitude')
-            ax3.set_ylabel('Latitude')
+            ax3.set_xlabel('Latitude')
+            ax3.set_ylabel('Longitude')
             ax3.set_title(f'Track (colored by VMG to {active_waypoint_name})')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
